@@ -13,7 +13,7 @@ ___INFO___
   "id": "cvt_temp_public_id",
   "version": 1,
   "securityGroups": [],
-  "displayName": "Piano Analytics Client by Stape",
+  "displayName": "Piano Analytics Client",
   "brand": {
     "id": "brand_dummy",
     "displayName": "Custom Template",
