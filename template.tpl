@@ -77,9 +77,9 @@ ___TEMPLATE_PARAMETERS___
           {
             "type": "TEXT",
             "name": "jsSdkRequestPath",
-            "displayName": "JS SDK Request Path",
+            "displayName": "JS SDK Activation Request Path",
             "simpleValueType": true,
-            "help": "The path of the JS SDK requests that should be handled by this Client.\u003cbr/\u003eDefault: \u003ci\u003e/piano-analytics.js\u003c/i\u003e",
+            "help": "The path of the JS SDK requests that should be handled by this Client when an incoming request is received by the sGTM container.\n\u003cbr/\u003e\u003cbr/\u003e\nDefault: \u003ci\u003e/piano-analytics.js\u003c/i\u003e\n\u003cbr/\u003e\u003cbr/\u003e\nThe same path will be used for fetching the JS SDK from Piano Analytics\u0027 servers.\n\u003cbr/\u003e\nExample: \u003ci\u003ehttps://tag.aticdn.net/piano-analytics.js\u003c/i\u003e\n\u003cbr/\u003e\u003cbr/\u003e\nOnly change it if you want to activate this Client using a custom JS SDK path, such as: \u003ci\u003e/piano-custom-sdk-path.js\u003c/i\u003e.\n\u003cbr/\u003e\nIn this case, you must enable the \u003cb\u003eOverride JS SDK Final Request Path\u003c/b\u003e checkbox below and provide the actual JS SDK path that this Client should fetch to serve the file.",
             "valueValidators": [
               {
                 "type": "NON_EMPTY"
@@ -93,6 +93,40 @@ ___TEMPLATE_PARAMETERS___
             ],
             "valueHint": "/piano-analytics.js",
             "defaultValue": "/piano-analytics.js"
+          },
+          {
+            "type": "CHECKBOX",
+            "name": "jsSdkRequestPathOverride",
+            "checkboxText": "Override JS SDK Final Request Path",
+            "simpleValueType": true,
+            "subParams": [
+              {
+                "type": "TEXT",
+                "name": "jsSdkRequestPathOverriden",
+                "displayName": "JS SDK Request Path",
+                "simpleValueType": true,
+                "help": "Specify a JS SDK version that you want to serve. \u003ca href\u003d\"https://developers.atinternet-solutions.com/piano-analytics/data-collection/sdks/javascript#cdn\"\u003eLearn more\u003c/a\u003e.\n\u003cbr/\u003e\u003cbr/\u003e\nExample: \u003ci\u003e/js-sdk/piano-analytics-6.16.1.js\u003c/i\u003e\n\u003cbr/\u003e\u003cbr/\u003e\nThis path will be used for fetching the JS SDK from Piano Analytics\u0027 servers.\n\u003cbr/\u003e\u003cbr/\u003e\nExample: \u003ci\u003ehttps://tag.aticdn.net/js-sdk/piano-analytics-6.16.1.js\u003c/i\u003e",
+                "valueValidators": [
+                  {
+                    "type": "NON_EMPTY"
+                  },
+                  {
+                    "type": "REGEX",
+                    "args": [
+                      "^/.+"
+                    ]
+                  }
+                ],
+                "valueHint": "/js-sdk/piano-analytics-6.16.1.js",
+                "enablingConditions": [
+                  {
+                    "paramName": "jsSdkRequestPathOverride",
+                    "paramValue": true,
+                    "type": "EQUALS"
+                  }
+                ]
+              }
+            ]
           },
           {
             "type": "TEXT",
@@ -420,7 +454,11 @@ if (isEventRequest()) {
   const twelveHoursAgo = now - 43200000; // 43200000 ms = 12 hours
 
   if (!storedJsBody || storedAt < twelveHoursAgo) {
-    const jsSdkEndpoint = 'https://tag.aticdn.net' + requestPath;
+    const jsSdkEndpoint =
+      'https://tag.aticdn.net' +
+      (data.jsSdkRequestPathOverride
+        ? data.jsSdkRequestPathOverriden
+        : clientActivationPaths.jsSdk);
     log('No cache hit or cache expired, fetching ' + jsSdkEndpoint + ' over the network.');
     sendHttpGet(jsSdkEndpoint).then((result) => {
       if (result.statusCode === 200) {
@@ -556,11 +594,12 @@ function getServerSideVisitorId(rawEvents) {
   const isAppRequest =
     (getRequestHeader('user-agent') || '').indexOf('Piano Analytics SDK') !== -1 ||
     rawEvents[0].data.event_collection_platform !== 'js'; // App or using opt-out mode.
-  if (
+
+  const shouldNotUseServerSideVisitorId =
     !useServerSideCookiesForVisitorID ||
     !isServerSideCookieVisitorIDAllowedByPrivacyMode ||
-    isAppRequest
-  ) {
+    isAppRequest;
+  if (shouldNotUseServerSideVisitorId) {
     return;
   }
 
@@ -1707,6 +1746,29 @@ scenarios:
     assertApi('setResponseBody').wasCalledWith(mockJsBody);\nfor (const key in mockResponseHeaders)\
     \ {\n  assertApi('setResponseHeader').wasCalledWith(key, mockResponseHeaders[key]);\n\
     }\nassertApi('returnResponse').wasCalled();"
+- name: JS SDK - Should serve it, if JS SDK request path is overriden
+  code: "// Used the same code from \"JS SDK - Should serve it, if all origins are\
+    \ allowed\"\n\nmockData.serveJsSdk = true;\nmockData.jsSdkRequestPathOverride\
+    \ = true;\nmockData.jsSdkRequestPathOverriden = '/js-sdk/piano-analytics-6.16.1.js';\n\
+    \nconst jsSdkRequestPath = '/my-custom-piano-sdk-path.js';\nconst expectedJsSdkEndpoint\
+    \ = 'https://tag.aticdn.net' + mockData.jsSdkRequestPathOverriden;\nmockData.jsSdkRequestPath\
+    \ = jsSdkRequestPath;\nmockData.jsSdkAllowedOrigins = '*';\n\nmock('getRequestPath',\
+    \ jsSdkRequestPath);\nmock('getRequestMethod', 'GET');\nmock('getRequestHeader',\
+    \ (header) => {\n  switch (header.toLowerCase()) {\n    case 'origin':\n     \
+    \ return 'https://example.net';\n  }\n});\n\n/* \n  For some reason when we use\
+    \ \"assertApi('claimRequest').wasCalled()\" AND we run all the tests,\n  it produces\
+    \ the following error \"Tried to claim a request after a Client had returned.\
+    \ Calling claimRequest from a callback is not supported.\"\n  If we run only this\
+    \ single test, the error does not occur.\n  A workaround is to mock 'claimRequest'\
+    \ API and make a dummy assertion in the mocked function. This way we make sure\
+    \ it's been called.\n*/\nlet claimRequestWasCalled;\nmock('claimRequest', () =>\
+    \ {\n  claimRequestWasCalled = true;\n});\n\nconst mockJsBody = 'foobar';\nmockObject('templateDataStorage',\
+    \ {\n  getItemCopy: (key) => {},\n  setItemCopy: (key, value) => {}\n});\n\nmock('sendHttpGet',\
+    \ (jsSdkEndpoint) => {\n  return {\n    then: (callback) => {\n      callback({\
+    \ \n        statusCode: 200,\n        body: 'foobar',\n        headers: {}\n \
+    \     });\n    }\n  };\n});\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\n\
+    assertApi('runContainer').wasNotCalled();\nassertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
+    assertApi('returnResponse').wasCalled();"
 - name: Event - Invalid request, should NOT claim it
   code: "// https://your.collection.domain/event?s=&events=\n\nconst eventRequestPath\
     \ = '/event';\nmockData.eventRequestPath = eventRequestPath;\n\n/* \n  For some\

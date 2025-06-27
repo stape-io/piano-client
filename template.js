@@ -90,7 +90,11 @@ if (isEventRequest()) {
   const twelveHoursAgo = now - 43200000; // 43200000 ms = 12 hours
 
   if (!storedJsBody || storedAt < twelveHoursAgo) {
-    const jsSdkEndpoint = 'https://tag.aticdn.net' + requestPath;
+    const jsSdkEndpoint =
+      'https://tag.aticdn.net' +
+      (data.jsSdkRequestPathOverride
+        ? data.jsSdkRequestPathOverriden
+        : clientActivationPaths.jsSdk);
     log('No cache hit or cache expired, fetching ' + jsSdkEndpoint + ' over the network.');
     sendHttpGet(jsSdkEndpoint).then((result) => {
       if (result.statusCode === 200) {
@@ -226,11 +230,12 @@ function getServerSideVisitorId(rawEvents) {
   const isAppRequest =
     (getRequestHeader('user-agent') || '').indexOf('Piano Analytics SDK') !== -1 ||
     rawEvents[0].data.event_collection_platform !== 'js'; // App or using opt-out mode.
-  if (
+
+  const shouldNotUseServerSideVisitorId =
     !useServerSideCookiesForVisitorID ||
     !isServerSideCookieVisitorIDAllowedByPrivacyMode ||
-    isAppRequest
-  ) {
+    isAppRequest;
+  if (shouldNotUseServerSideVisitorId) {
     return;
   }
 
