@@ -4,7 +4,6 @@ The **Piano Analytics Client for Server-Side GTM** handles incoming requests in 
 
 It's designed to integrate seamlessly with the [Piano Analytics Tag by Stape](https://github.com/stape-io/piano-tag).
 
-
 ## What This Client Does
 
 - **Claims and processes Piano Analytics event requests** sent to a specific path (default: `/event`)
@@ -15,15 +14,18 @@ It's designed to integrate seamlessly with the [Piano Analytics Tag by Stape](ht
 ## Features
 
 ### 🎯 Event Handling
+
 - Accepts requests via `GET` or `POST` to a specified path (e.g., `/event`)
 - Extracts and maps each Piano Analytics event into a format compatible with GTM Server
 - Runs the container for each event individually
 
 ### 🍪 Cookie Management
+
 - **Rewrite Client-Side Cookies**: Rewrites Piano cookies like `_pcid`, `pa_user`, and others for improved consistency
 - **Use Server-Side Cookies for Visitor ID**: Securely stores the Visitor ID in HTTP-only cookies, if user consent allows
 
 ### 💻 SDK Hosting (Web Only)
+
 - Optionally serves the `piano-analytics.js` SDK file from your server
 - Cached for 12 hours and auto-refreshed when stale
 - Supports origin allowlisting for secure SDK delivery
@@ -46,12 +48,12 @@ It's designed to integrate seamlessly with the [Piano Analytics Tag by Stape](ht
 
 ## Parameters
 
-| Field | Description |
-|-------|-------------|
-| `Events Request Path` | Path where event data will be received (e.g. `/event`) |
-| `Serve piano-analytics.js JS SDK` | If enabled, allows sGTM to serve the JS SDK directly |
-| `Allowed Origins` | Comma-separated list of domains allowed to fetch the JS SDK |
-| `Rewrite Client-Side Cookies` | Rewrites Piano cookies with server-side control |
+| Field                                    | Description                                                    |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `Events Request Path`                    | Path where event data will be received (e.g. `/event`)         |
+| `Serve piano-analytics.js JS SDK`        | If enabled, allows sGTM to serve the JS SDK directly           |
+| `Allowed Origins`                        | Comma-separated list of domains allowed to fetch the JS SDK    |
+| `Rewrite Client-Side Cookies`            | Rewrites Piano cookies with server-side control                |
 | `Use Server-Side cookies for Visitor ID` | Creates HTTP-only cookies to store and use visitor ID securely |
 
 ## Use Cases
@@ -66,6 +68,10 @@ It's designed to integrate seamlessly with the [Piano Analytics Tag by Stape](ht
 - Visitor ID server-side cookies are only created if the `visitor_privacy_mode` is allowed
 - SDK caching lasts 12 hours and automatically refreshes in the background
 - The client avoids setting cookies for app requests or when consent is not granted
+
+## Useful Resources:
+
+- [Step-by-step guide on how to configure Piano server-side tracking](https://stape.io/blog/piano-analytics-server-side-tracking-guide)
 
 ## Open Source
 
