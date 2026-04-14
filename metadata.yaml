@@ -1,6 +1,8 @@
 homepage: 'https://stape.io/'
 documentation: 'https://github.com/stape-io/piano-client'
 versions:
+  - sha: c341f5ff42acd2cbbfbd6b94fd9734cca1549113
+    changeNotes: Catch proxy rejections and consolidate JS SDK tests
   - sha: d3168bf011701839c7ab4fd4a704aa537c94ec14
     changeNotes: Add brand name to UI.
   - sha: 8b04f6119d07b403e40fca60dad17a5c8714163e

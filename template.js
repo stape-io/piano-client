@@ -24,7 +24,8 @@ const setResponseHeader = require('setResponseHeader');
 const setResponseStatus = require('setResponseStatus');
 const templateDataStorage = require('templateDataStorage');
 
-/**********************************************************************************************/
+/*==============================================================================
+==============================================================================*/
 
 const clientActivationPaths = {
   event: data.eventRequestPath,
@@ -96,21 +97,30 @@ if (isEventRequest()) {
         ? data.jsSdkRequestPathOverriden
         : clientActivationPaths.jsSdk);
     log('No cache hit or cache expired, fetching ' + jsSdkEndpoint + ' over the network.');
-    sendHttpGet(jsSdkEndpoint).then((result) => {
-      if (result.statusCode === 200) {
-        templateDataStorage.setItemCopy(storageJsBodyKey, result.body);
-        templateDataStorage.setItemCopy(storageHeadersKey, result.headers);
-        templateDataStorage.setItemCopy(storageStoredAtKey, now);
-      }
-      sendProxyResponse(result.body, result.headers, result.statusCode);
-    });
+    sendHttpGet(jsSdkEndpoint)
+      .then((result) => {
+        if (result.statusCode === 200) {
+          templateDataStorage.setItemCopy(storageJsBodyKey, result.body);
+          templateDataStorage.setItemCopy(storageHeadersKey, result.headers);
+          templateDataStorage.setItemCopy(storageStoredAtKey, now);
+        }
+        sendProxyResponse(result.body, result.headers, result.statusCode);
+      })
+      .catch((error) => {
+        log(
+          'Failed to fetch ' + jsSdkEndpoint + ' over the network. Reason: ' + JSON.stringify(error)
+        );
+        sendProxyResponse('', {}, 500);
+      });
   } else {
     log('Cache hit successful, fetching ' + requestPath + ' from sGTM storage.');
     sendProxyResponse(storedJsBody, storedHeaders, 200);
   }
 }
 
-/**********************************************************************************************/
+/*==============================================================================
+  Vendor related functions
+==============================================================================*/
 
 function isEventRequest() {
   return (
@@ -307,8 +317,9 @@ function rewriteClientSideCookies() {
   });
 }
 
-/**********************************************************************************************/
-// Helpers
+/*==============================================================================
+  Helpers
+==============================================================================*/
 
 function log(msg) {
   logToConsole('[Piano Analytics Client] ', msg);
