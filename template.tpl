@@ -388,7 +388,8 @@ const setResponseHeader = require('setResponseHeader');
 const setResponseStatus = require('setResponseStatus');
 const templateDataStorage = require('templateDataStorage');
 
-/**********************************************************************************************/
+/*==============================================================================
+==============================================================================*/
 
 const clientActivationPaths = {
   event: data.eventRequestPath,
@@ -460,21 +461,30 @@ if (isEventRequest()) {
         ? data.jsSdkRequestPathOverriden
         : clientActivationPaths.jsSdk);
     log('No cache hit or cache expired, fetching ' + jsSdkEndpoint + ' over the network.');
-    sendHttpGet(jsSdkEndpoint).then((result) => {
-      if (result.statusCode === 200) {
-        templateDataStorage.setItemCopy(storageJsBodyKey, result.body);
-        templateDataStorage.setItemCopy(storageHeadersKey, result.headers);
-        templateDataStorage.setItemCopy(storageStoredAtKey, now);
-      }
-      sendProxyResponse(result.body, result.headers, result.statusCode);
-    });
+    sendHttpGet(jsSdkEndpoint)
+      .then((result) => {
+        if (result.statusCode === 200) {
+          templateDataStorage.setItemCopy(storageJsBodyKey, result.body);
+          templateDataStorage.setItemCopy(storageHeadersKey, result.headers);
+          templateDataStorage.setItemCopy(storageStoredAtKey, now);
+        }
+        sendProxyResponse(result.body, result.headers, result.statusCode);
+      })
+      .catch((error) => {
+        log(
+          'Failed to fetch ' + jsSdkEndpoint + ' over the network. Reason: ' + JSON.stringify(error)
+        );
+        sendProxyResponse('', {}, 500);
+      });
   } else {
     log('Cache hit successful, fetching ' + requestPath + ' from sGTM storage.');
     sendProxyResponse(storedJsBody, storedHeaders, 200);
   }
 }
 
-/**********************************************************************************************/
+/*==============================================================================
+  Vendor related functions
+==============================================================================*/
 
 function isEventRequest() {
   return (
@@ -671,8 +681,9 @@ function rewriteClientSideCookies() {
   });
 }
 
-/**********************************************************************************************/
-// Helpers
+/*==============================================================================
+  Helpers
+==============================================================================*/
 
 function log(msg) {
   logToConsole('[Piano Analytics Client] ', msg);
@@ -1630,9 +1641,12 @@ scenarios:
     \ {\n  getItemCopy: (key) => {},\n  setItemCopy: (key, value) => {}\n});\n\nmock('sendHttpGet',\
     \ (jsSdkEndpoint) => {\n  return {\n    then: (callback) => {\n      callback({\
     \ \n        statusCode: 200,\n        body: 'foobar',\n        headers: {}\n \
-    \     });\n    }\n  };\n});\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\n\
-    assertApi('runContainer').wasNotCalled();\nassertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
-    assertApi('returnResponse').wasCalled();"
+    \     });\n    }\n  };\n});\n\nmock('sendHttpGet', (jsSdkEndpoint) => {\n  return\
+    \ Promise.create((resolve, reject) => {\n    resolve({ statusCode: 200, body:\
+    \ 'foobar', headers: {} });\n  });\n});\n\nrunCode(mockData);\n\ncallLater(()\
+    \ => {\n  assertThat(claimRequestWasCalled).isTrue();\n  assertApi('runContainer').wasNotCalled();\n\
+    \  assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n  assertApi('returnResponse').wasCalled();\n\
+    });"
 - name: JS SDK - Should serve it, if specific origin is allowed
   code: "mockData.serveJsSdk = true;\nconst jsSdkRequestPath = '/piano-analytics.js';\n\
     const expectedJsSdkEndpoint = 'https://tag.aticdn.net' + jsSdkRequestPath;\nmockData.jsSdkRequestPath\
@@ -1649,74 +1663,97 @@ scenarios:
     \ () => {\n  claimRequestWasCalled = true;\n});\n\nconst mockJsBody = 'foobar';\n\
     mockObject('templateDataStorage', {\n  getItemCopy: (key) => {},\n  setItemCopy:\
     \ (key, value) => {}\n});\n\nmock('sendHttpGet', (jsSdkEndpoint) => {\n  return\
-    \ {\n    then: (callback) => {\n      callback({ \n        statusCode: 200,\n\
-    \        body: 'foobar',\n        headers: {}\n      });\n    }\n  };\n});\n\n\
-    runCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\nassertApi('runContainer').wasNotCalled();\n\
-    assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\nassertApi('returnResponse').wasCalled();"
-- name: JS SDK - Should serve it, fetch from network if not available in cache
-  code: "mockData.serveJsSdk = true;\nconst jsSdkRequestPath = '/piano-analytics.js';\n\
-    const expectedJsSdkEndpoint = 'https://tag.aticdn.net' + jsSdkRequestPath;\nmockData.jsSdkRequestPath\
-    \ = jsSdkRequestPath;\nmockData.jsSdkAllowedOrigins = 'https://example.net,https://example.org';\n\
-    \nmock('getRequestPath', jsSdkRequestPath);\nmock('getRequestMethod', 'GET');\n\
-    mock('getRequestHeader', (header) => {\n  switch (header.toLowerCase()) {\n  \
-    \  case 'origin':\n      return 'https://example.net';\n  }\n});\n\nconst now\
-    \ = 1745513920245;\nmock('getTimestampMillis', now);\n\n/* \n  For some reason\
-    \ when we use \"assertApi('claimRequest').wasCalled()\" AND we run all the tests,\n\
-    \  it produces the following error \"Tried to claim a request after a Client had\
-    \ returned. Calling claimRequest from a callback is not supported.\"\n  If we\
-    \ run only this single test, the error does not occur.\n  A workaround is to mock\
-    \ 'claimRequest' API and make a dummy assertion in the mocked function. This way\
-    \ we make sure it's been called.\n*/\nlet claimRequestWasCalled;\nmock('claimRequest',\
-    \ () => {\n  claimRequestWasCalled = true;\n});\n\nconst mockJsBody = 'foobar';\n\
-    const mockResponseHeaders = { foo: 'bar' };\nmockObject('templateDataStorage',\
-    \ {\n  setItemCopy: (key, value) => {\n    switch (key) {\n      case 'piano-analytics-js':\n\
-    \        assertThat(value).isEqualTo(mockJsBody);\n        return;\n      case\
-    \ 'piano-analytics-js-headers':\n        assertThat(value).isEqualTo(mockResponseHeaders);\n\
-    \        return;\n      case 'piano-analytics-js-stored-at':\n        assertThat(value).isEqualTo(now);\n\
-    \        return;\n    }\n  },\n  getItemCopy: (key) => {\n    switch (key) {\n\
-    \      case 'piano-analytics-js':\n        return;\n      case 'piano-analytics-js-headers':\n\
-    \        return;\n      case 'piano-analytics-js-stored-at':\n        return;\n\
-    \    }\n  }\n});\n\nconst mockResponseStatusCode = 200;\nmock('sendHttpGet', (jsSdkEndpoint)\
-    \ => {\n  return {\n    then: (callback) => {\n      callback({ \n        statusCode:\
-    \ mockResponseStatusCode,\n        body: mockJsBody,\n        headers: mockResponseHeaders\n\
-    \      });\n    }\n  };\n});\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\n\
-    assertApi('runContainer').wasNotCalled();\nassertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
-    assertApi('setResponseStatus').wasCalledWith(mockResponseStatusCode);\nassertApi('setResponseBody').wasCalledWith(mockJsBody);\n\
-    for (const key in mockResponseHeaders) {\n  assertApi('setResponseHeader').wasCalledWith(key,\
-    \ mockResponseHeaders[key]);\n}\nassertApi('returnResponse').wasCalled();"
-- name: JS SDK - Should serve it, fetch from network if available in cache but cache
-    is expired
-  code: "mockData.serveJsSdk = true;\nconst jsSdkRequestPath = '/piano-analytics.js';\n\
-    const expectedJsSdkEndpoint = 'https://tag.aticdn.net' + jsSdkRequestPath;\nmockData.jsSdkRequestPath\
-    \ = jsSdkRequestPath;\nmockData.jsSdkAllowedOrigins = 'https://example.net,https://example.org';\n\
-    \nmock('getRequestPath', jsSdkRequestPath);\nmock('getRequestMethod', 'GET');\n\
-    mock('getRequestHeader', (header) => {\n  switch (header.toLowerCase()) {\n  \
-    \  case 'origin':\n      return 'https://example.net';\n  }\n});\n\nconst now\
-    \ = 1745513920245;\nmock('getTimestampMillis', now);\n\n/* \n  For some reason\
-    \ when we use \"assertApi('claimRequest').wasCalled()\" AND we run all the tests,\n\
-    \  it produces the following error \"Tried to claim a request after a Client had\
-    \ returned. Calling claimRequest from a callback is not supported.\"\n  If we\
-    \ run only this single test, the error does not occur.\n  A workaround is to mock\
-    \ 'claimRequest' API and make a dummy assertion in the mocked function. This way\
-    \ we make sure it's been called.\n*/\nlet claimRequestWasCalled;\nmock('claimRequest',\
-    \ () => {\n  claimRequestWasCalled = true;\n});\n\nconst templateDataStorage =\
-    \ {};\nconst mockJsBody = 'foobar';\nconst mockResponseHeaders = { foo: 'bar'\
-    \ };\nmockObject('templateDataStorage', {\n  setItemCopy: (key, value) => {\n\
-    \    switch (key) {\n      case 'piano-analytics-js':\n        assertThat(value).isEqualTo(mockJsBody);\n\
-    \        return;\n      case 'piano-analytics-js-headers':\n        assertThat(value).isEqualTo(mockResponseHeaders);\n\
-    \        return;\n      case 'piano-analytics-js-stored-at':\n        assertThat(value).isEqualTo(now);\n\
-    \        return;\n    }\n  },\n  getItemCopy: (key) => {\n    switch (key) {\n\
-    \      case 'piano-analytics-js':\n        return;\n      case 'piano-analytics-js-headers':\n\
-    \        return;\n      case 'piano-analytics-js-stored-at':\n        return now\
-    \ - JS_SDK_CACHE_EXPIRATION - 10000; // - 10000 to make sure it is expired\n \
-    \   }\n  }\n});\n\nconst mockResponseStatusCode = 200;\nmock('sendHttpGet', (jsSdkEndpoint)\
-    \ => {\n  return {\n    then: (callback) => {\n      callback({ \n        statusCode:\
-    \ mockResponseStatusCode,\n        body: mockJsBody,\n        headers: mockResponseHeaders\n\
-    \      });\n    }\n  };\n});\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\n\
-    assertApi('runContainer').wasNotCalled();\nassertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
-    assertApi('setResponseStatus').wasCalledWith(mockResponseStatusCode);\nassertApi('setResponseBody').wasCalledWith(mockJsBody);\n\
-    for (const key in mockResponseHeaders) {\n  assertApi('setResponseHeader').wasCalledWith(key,\
-    \ mockResponseHeaders[key]);\n}\nassertApi('returnResponse').wasCalled();"
+    \ Promise.create((resolve, reject) => {\n    resolve({ statusCode: 200, body:\
+    \ 'foobar', headers: {} });\n  });\n});\n\nrunCode(mockData);\n\ncallLater(()\
+    \ => {\n  assertThat(claimRequestWasCalled).isTrue();\n  assertApi('runContainer').wasNotCalled();\n\
+    \  assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n  assertApi('returnResponse').wasCalled();\n\
+    });"
+- name: JS SDK - Should serve it, fetch from network if not in cache or cache is expired
+  code: |-
+    mockData.serveJsSdk = true;
+    const jsSdkRequestPath = '/piano-analytics.js';
+    const expectedJsSdkEndpoint = 'https://tag.aticdn.net' + jsSdkRequestPath;
+    mockData.jsSdkRequestPath = jsSdkRequestPath;
+    mockData.jsSdkAllowedOrigins = 'https://example.net,https://example.org';
+
+    mock('getRequestPath', jsSdkRequestPath);
+    mock('getRequestMethod', 'GET');
+    mock('getRequestHeader', (header) => {
+      switch (header.toLowerCase()) {
+        case 'origin':
+          return 'https://example.net';
+      }
+    });
+
+    const now = 1745513920245;
+    mock('getTimestampMillis', now);
+
+    const mockJsBody = 'foobar';
+    const mockResponseHeaders = { foo: 'bar' };
+    const mockResponseStatusCode = 200;
+
+    /*
+      For some reason when we use "assertApi('claimRequest').wasCalled()" AND we run all the tests,
+      it produces the following error "Tried to claim a request after a Client had returned. Calling claimRequest from a callback is not supported."
+      If we run only this single test, the error does not occur.
+      A workaround is to mock 'claimRequest' API and make a dummy assertion in the mocked function. This way we make sure it's been called.
+    */
+    let claimRequestWasCalled;
+    mock('claimRequest', () => {
+      claimRequestWasCalled = true;
+    });
+
+    mock('sendHttpGet', (jsSdkEndpoint) => {
+      return Promise.create((resolve, reject) => {
+        resolve({ statusCode: mockResponseStatusCode, body: mockJsBody, headers: mockResponseHeaders });
+      });
+    });
+
+    // Two cache states both trigger a network fetch: no stored timestamp, and expired timestamp.
+    [
+      { label: 'not in cache', storedAt: undefined },
+      { label: 'cache expired', storedAt: now - JS_SDK_CACHE_EXPIRATION - 10000 }
+    ].forEach((scenario) => {
+      mockObject('templateDataStorage', {
+        setItemCopy: (key, value) => {
+          switch (key) {
+            case 'piano-analytics-js':
+              assertThat(value).isEqualTo(mockJsBody);
+              return;
+            case 'piano-analytics-js-headers':
+              assertThat(value).isEqualTo(mockResponseHeaders);
+              return;
+            case 'piano-analytics-js-stored-at':
+              assertThat(value).isEqualTo(now);
+              return;
+          }
+        },
+        getItemCopy: (key) => {
+          switch (key) {
+            case 'piano-analytics-js':
+              return;
+            case 'piano-analytics-js-headers':
+              return;
+            case 'piano-analytics-js-stored-at':
+              return scenario.storedAt;
+          }
+        }
+      });
+
+      runCode(mockData);
+
+      callLater(() => {
+        assertThat(claimRequestWasCalled).isTrue();
+        assertApi('runContainer').wasNotCalled();
+        assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);
+        assertApi('setResponseStatus').wasCalledWith(mockResponseStatusCode);
+        assertApi('setResponseBody').wasCalledWith(mockJsBody);
+        for (const key in mockResponseHeaders) {
+          assertApi('setResponseHeader').wasCalledWith(key, mockResponseHeaders[key]);
+        }
+        assertApi('returnResponse').wasCalled();
+      });
+    });
 - name: JS SDK - Should serve it, fetch from cache if available in cache and cache
     is NOT expired
   code: "mockData.serveJsSdk = true;\nconst jsSdkRequestPath = '/piano-analytics.js';\n\
@@ -1764,11 +1801,33 @@ scenarios:
     \ it's been called.\n*/\nlet claimRequestWasCalled;\nmock('claimRequest', () =>\
     \ {\n  claimRequestWasCalled = true;\n});\n\nconst mockJsBody = 'foobar';\nmockObject('templateDataStorage',\
     \ {\n  getItemCopy: (key) => {},\n  setItemCopy: (key, value) => {}\n});\n\nmock('sendHttpGet',\
-    \ (jsSdkEndpoint) => {\n  return {\n    then: (callback) => {\n      callback({\
-    \ \n        statusCode: 200,\n        body: 'foobar',\n        headers: {}\n \
-    \     });\n    }\n  };\n});\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\n\
-    assertApi('runContainer').wasNotCalled();\nassertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
-    assertApi('returnResponse').wasCalled();"
+    \ (jsSdkEndpoint) => {\n  return Promise.create((resolve, reject) => {\n    resolve({\
+    \ statusCode: 200, body: 'foobar', headers: {} });\n  });\n});\n\nrunCode(mockData);\n\
+    \ncallLater(() => {\n  assertThat(claimRequestWasCalled).isTrue();\n  assertApi('runContainer').wasNotCalled();\n\
+    \  assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n  assertApi('returnResponse').wasCalled();\n\
+    });"
+- name: JS SDK - Should serve 500, if JS SDK request rejects
+  code: "// Used the same code from \"JS SDK - Should serve it, if all origins are\
+    \ allowed\"\n\nmockData.serveJsSdk = true;\nmockData.jsSdkRequestPathOverride\
+    \ = true;\nmockData.jsSdkRequestPathOverriden = '/js-sdk/piano-analytics-6.16.1.js';\n\
+    \nconst jsSdkRequestPath = '/my-custom-piano-sdk-path.js';\nconst expectedJsSdkEndpoint\
+    \ = 'https://tag.aticdn.net' + mockData.jsSdkRequestPathOverriden;\nmockData.jsSdkRequestPath\
+    \ = jsSdkRequestPath;\nmockData.jsSdkAllowedOrigins = '*';\n\nmock('getRequestPath',\
+    \ jsSdkRequestPath);\nmock('getRequestMethod', 'GET');\nmock('getRequestHeader',\
+    \ (header) => {\n  switch (header.toLowerCase()) {\n    case 'origin':\n     \
+    \ return 'https://example.net';\n  }\n});\n\n/* \n  For some reason when we use\
+    \ \"assertApi('claimRequest').wasCalled()\" AND we run all the tests,\n  it produces\
+    \ the following error \"Tried to claim a request after a Client had returned.\
+    \ Calling claimRequest from a callback is not supported.\"\n  If we run only this\
+    \ single test, the error does not occur.\n  A workaround is to mock 'claimRequest'\
+    \ API and make a dummy assertion in the mocked function. This way we make sure\
+    \ it's been called.\n*/\nlet claimRequestWasCalled;\nmock('claimRequest', () =>\
+    \ {\n  claimRequestWasCalled = true;\n});\n\nconst mockJsBody = 'foobar';\nmockObject('templateDataStorage',\
+    \ {\n  getItemCopy: (key) => {},\n  setItemCopy: (key, value) => {}\n});\n\nmock('sendHttpGet',\
+    \ (jsSdkEndpoint) => {\n  return Promise.create((resolve, reject) => reject({\
+    \ reason: 'failed' }));\n});\n\nrunCode(mockData);\n\ncallLater(() => {\n  assertThat(claimRequestWasCalled).isTrue();\n\
+    \  assertApi('runContainer').wasNotCalled();\n  assertApi('sendHttpGet').wasCalledWith(expectedJsSdkEndpoint);\n\
+    \  assertApi('returnResponse').wasCalled();\n});"
 - name: Event - Invalid request, should NOT claim it
   code: "// https://your.collection.domain/event?s=&events=\n\nconst eventRequestPath\
     \ = '/event';\nmockData.eventRequestPath = eventRequestPath;\n\n/* \n  For some\
@@ -2043,9 +2102,11 @@ scenarios:
     });\n\nrunCode(mockData);\n\nassertThat(claimRequestWasCalled).isTrue();\nassertApi('setPixelResponse').wasCalled();\n\
     assertApi('returnResponse').wasCalled();"
 setup: |-
+  const Promise = require('Promise');
   const JSON = require('JSON');
   const encodeUriComponent = require('encodeUriComponent');
   const decodeUriComponent = require('decodeUriComponent');
+  const callLater = require('callLater');
 
   const mockData = {};
 
@@ -2355,6 +2416,9 @@ setup: |-
 
 
 ___NOTES___
+
+2026-04-14 - Change Notes:
+  - Improve JS SDK failed request handling.
 
 Created on 5/1/2025, 1:44:23 PM
 
