@@ -76,3 +76,6 @@ It's designed to integrate seamlessly with the [Piano Analytics Tag by Stape](ht
 ## Open Source
 
 The **Piano Analytics Client for Google Tag Manager Server-Side** is developed and maintained by [Stape Team](https://stape.io/) under the Apache 2.0 license.
+
+### GTM Gallery Status
+🔴 Not listed
